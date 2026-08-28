@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-MASTER API SEARCH BOT - Vercel Edition
-All Lynx APIs integrated into Telegram Bot
+MASTER API SEARCH BOT - Vercel Edition (Simplified)
 Powered By @Introspection007
 """
 
@@ -17,11 +16,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 # ============================================================
 # CONFIGURATION
 # ============================================================
-TOKEN = os.environ.get('TELEGRAM_TOKEN', '8786109822:AAFEPEAkOyUuUyFER_ufCfeyGyvnzFtfEcA')
-BOT_USERNAME = "@Introspection007"
-
-# Conversation states
-SELECTING_SEARCH, WAITING_PHONE, WAITING_ADDRESS, WAITING_NAME, WAITING_AADHAR = range(5)
+TOKEN = "8786109822:AAFEPEAkOyUuUyFER_ufCfeyGyvnzFtfEcA"
 
 # ============================================================
 # SAFE JSON PARSER
@@ -37,28 +32,11 @@ def parse_json_safely(text):
             return json.loads(match.group())
         except:
             pass
-    try:
-        decoder = json.JSONDecoder()
-        data, _ = decoder.raw_decode(text)
-        return data
-    except:
-        pass
     return None
 
 # ============================================================
 # API FUNCTIONS
 # ============================================================
-
-def search_hitek(number):
-    url = f"https://lynx.mireiariosss.workers.dev/api/chain/{number}"
-    try:
-        resp = requests.get(url, timeout=30)
-        data = parse_json_safely(resp.text)
-        if data:
-            return json.dumps(data, indent=2, ensure_ascii=False)
-        return "❌ No data found"
-    except Exception as e:
-        return f"❌ Error: {e}"
 
 def search_num(number):
     url = f"https://lynx.mireiariosss.workers.dev/api/search/{number}"
@@ -87,9 +65,8 @@ def search_num(number):
     except Exception as e:
         return f"❌ Error: {e}"
 
-def search_address(address):
-    encoded = urllib.parse.quote(address)
-    url = f"https://lynx.mireiariosss.workers.dev/api/address/{encoded}"
+def search_hitek(number):
+    url = f"https://lynx.mireiariosss.workers.dev/api/chain/{number}"
     try:
         resp = requests.get(url, timeout=30)
         data = parse_json_safely(resp.text)
@@ -132,6 +109,18 @@ def search_icmr_aadhar(aadhar):
     except Exception as e:
         return f"❌ Error: {e}"
 
+def search_address(address):
+    encoded = urllib.parse.quote(address)
+    url = f"https://lynx.mireiariosss.workers.dev/api/address/{encoded}"
+    try:
+        resp = requests.get(url, timeout=30)
+        data = parse_json_safely(resp.text)
+        if data:
+            return json.dumps(data, indent=2, ensure_ascii=False)
+        return "❌ No data found"
+    except Exception as e:
+        return f"❌ Error: {e}"
+
 def search_all(query):
     output = "🚀 SEARCHING ALL APIS\n" + "=" * 30 + "\n\n"
     output += "🔍 NUM SEARCH:\n" + search_num(query) + "\n\n"
@@ -140,7 +129,7 @@ def search_all(query):
     return output
 
 # ============================================================
-# BOT HANDLERS
+# BOT HANDLERS (SYNC)
 # ============================================================
 
 def get_main_menu():
@@ -156,6 +145,15 @@ def get_main_menu():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# ============================================================
+# FLASK APP
+# ============================================================
+app = Flask(__name__)
+
+# Initialize Application and bot
+application = Application.builder().token(TOKEN).build()
+
+# ---- COMMAND HANDLERS ----
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     welcome = f"""
@@ -211,26 +209,25 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     search_types = {
-        "hitek": {"text": "🔗 Enter phone number for Hitek Chain:", "state": WAITING_PHONE, "type": "hitek"},
-        "num": {"text": "❤️‍🔥 Enter phone number for Num Search:", "state": WAITING_PHONE, "type": "num"},
-        "address": {"text": "📍 Enter full address to search:", "state": WAITING_ADDRESS, "type": "address"},
-        "icmr_phone": {"text": "🇮🇳 Enter phone number for ICMR:", "state": WAITING_PHONE, "type": "icmr_phone"},
-        "icmr_name": {"text": "📛 Enter name for ICMR:", "state": WAITING_NAME, "type": "icmr_name"},
-        "icmr_aadhar": {"text": "👨‍🦰 Enter 12-digit Aadhar number:", "state": WAITING_AADHAR, "type": "icmr_aadhar"},
-        "all": {"text": "🚀 Enter phone number to search ALL APIs:", "state": WAITING_PHONE, "type": "all"},
+        "hitek": "🔗 Enter phone number for Hitek Chain:",
+        "num": "❤️‍🔥 Enter phone number for Num Search:",
+        "address": "📍 Enter full address to search:",
+        "icmr_phone": "🇮🇳 Enter phone number for ICMR:",
+        "icmr_name": "📛 Enter name for ICMR:",
+        "icmr_aadhar": "👨‍🦰 Enter 12-digit Aadhar number:",
+        "all": "🚀 Enter phone number to search ALL APIs:",
     }
     
     if data in search_types:
         context.user_data['search_type'] = data
         await query.edit_message_text(
-            search_types[data]["text"],
+            search_types[data],
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back")]])
         )
-        return search_types[data]["state"]
+        return
     
     if data == "back":
         await query.edit_message_text("🔍 Select a search option:", reply_markup=get_main_menu())
-        return ConversationHandler.END
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text.strip()
@@ -238,22 +235,24 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.chat.send_action(action="typing")
     
+    # Validate
     if search_type in ["hitek", "num", "icmr_phone", "all"]:
         if not user_input.isdigit() or len(user_input) < 10:
             await update.message.reply_text(
                 "❌ Invalid phone number! Please enter a valid 10-digit number.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back")]])
             )
-            return WAITING_PHONE
+            return
     
     if search_type == "icmr_aadhar":
         if not user_input.isdigit() or len(user_input) != 12:
             await update.message.reply_text(
-                "❌ Invalid Aadhar! Please enter a valid 12-digit Aadhar number.",
+                "❌ Invalid Aadhar! Please enter a valid 12-digit number.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Back", callback_data="back")]])
             )
-            return WAITING_AADHAR
+            return
     
+    # Search
     msg = await update.message.reply_text("⏳ Searching... Please wait.")
     
     if search_type == "hitek":
@@ -275,61 +274,40 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await msg.delete()
     
-    formatted_result = result[:4000]  # Telegram max length
     await update.message.reply_text(
-        f"📊 **Search Results**\n\n{formatted_result}\n\n---\n⚡ Powered By @Introspection007",
+        f"📊 **Search Results**\n\n{result[:4000]}\n\n---\n⚡ Powered By @Introspection007",
         reply_markup=get_main_menu(),
         parse_mode='Markdown'
     )
-    
-    return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Cancelled. Use /start to begin again.", reply_markup=get_main_menu())
-    return ConversationHandler.END
-
-# ============================================================
-# FLASK APP FOR WEBHOOK
-# ============================================================
-app = Flask(__name__)
-
-# Initialize Application and bot
-application = Application.builder().token(TOKEN).build()
 
 # Register handlers
-conv_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(button_handler)],
-    states={
-        WAITING_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
-        WAITING_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
-        WAITING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
-        WAITING_AADHAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
-    },
-    fallbacks=[CommandHandler("cancel", cancel)]
-)
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("help", start))
-application.add_handler(conv_handler)
+application.add_handler(CallbackQueryHandler(button_handler))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+application.add_handler(CommandHandler("cancel", cancel))
 
+# ============================================================
+# WEBHOOK ENDPOINT
+# ============================================================
 @app.route('/', methods=['GET'])
 def index():
     return "🤖 API Search Bot is running! Powered By @Introspection007"
 
 @app.route('/webhook', methods=['POST'])
-async def webhook():
+def webhook():
     """Handle incoming Telegram updates"""
     try:
-        # Get the update data
         update_data = request.get_json()
         if not update_data:
             return jsonify({"status": "error", "message": "No data"}), 400
-
-        # Create Update object
+        
         update = Update.de_json(update_data, application.bot)
-
-        # Process the update
-        await application.process_update(update)
-
+        application.process_update(update)
+        
         return jsonify({"status": "ok"}), 200
     except Exception as e:
         print(f"Error in webhook: {e}")
@@ -340,7 +318,6 @@ async def webhook():
 # ============================================================
 def set_webhook():
     """Set the webhook URL for Telegram"""
-    # Get the base URL from environment (Vercel provides this)
     vercel_url = os.environ.get('VERCEL_URL')
     if vercel_url:
         webhook_url = f"https://{vercel_url}/webhook"
@@ -356,7 +333,7 @@ def set_webhook():
         except Exception as e:
             print(f"❌ Error setting webhook: {e}")
 
-# Set webhook when app starts (Vercel serverless)
+# Set webhook when app starts
 set_webhook()
 
 if __name__ == "__main__":
