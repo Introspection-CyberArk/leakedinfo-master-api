@@ -1,0 +1,22 @@
+{
+  "name": "api-search-bot",
+  "version": 2,
+  "builds": [
+    {
+      "src": "bot.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxDuration": 10
+      }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "bot.py"
+    }
+  ],
+  "env": {
+    "TELEGRAM_TOKEN": "8786109822:AAFEPEAkOyUuUyFER_ufCfeyGyvnzFtfEcA"
+  }
+}
