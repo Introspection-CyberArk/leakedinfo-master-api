@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MASTER API SEARCH BOT
+MASTER API SEARCH BOT - Vercel Edition
 All Lynx APIs integrated into Telegram Bot
 Powered By @Introspection007
 """
@@ -10,13 +10,14 @@ import json
 import re
 import requests
 import urllib.parse
+from flask import Flask, request, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 
 # ============================================================
 # CONFIGURATION
 # ============================================================
-TOKEN = "8786109822:AAFEPEAkOyUuUyFER_ufCfeyGyvnzFtfEcA"
+TOKEN = os.environ.get('TELEGRAM_TOKEN', '8786109822:AAFEPEAkOyUuUyFER_ufCfeyGyvnzFtfEcA')
 BOT_USERNAME = "@Introspection007"
 
 # Conversation states
@@ -139,18 +140,9 @@ def search_all(query):
     return output
 
 # ============================================================
-# FORMAT RESULT FOR TELEGRAM
-# ============================================================
-def format_result(text, max_length=4000):
-    if len(text) > max_length:
-        return text[:max_length] + "\n\n... (truncated)"
-    return text
-
-# ============================================================
 # BOT HANDLERS
 # ============================================================
 
-# ---- MAIN MENU BUTTONS ----
 def get_main_menu():
     keyboard = [
         [InlineKeyboardButton("🔗 Hitek Chain", callback_data="hitek")],
@@ -164,7 +156,6 @@ def get_main_menu():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# ---- START ----
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     welcome = f"""
@@ -186,7 +177,6 @@ Select an option below:
 """
     await update.message.reply_text(welcome, reply_markup=get_main_menu())
 
-# ---- ABOUT ----
 async def about(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -211,7 +201,6 @@ Available APIs:
 """
     await query.edit_message_text(about_text, reply_markup=get_main_menu())
 
-# ---- BUTTON HANDLER ----
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -243,15 +232,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("🔍 Select a search option:", reply_markup=get_main_menu())
         return ConversationHandler.END
 
-# ---- MESSAGE HANDLER ----
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text.strip()
     search_type = context.user_data.get('search_type', 'num')
     
-    # Show typing indicator
     await update.message.chat.send_action(action="typing")
     
-    # Validate input based on search type
     if search_type in ["hitek", "num", "icmr_phone", "all"]:
         if not user_input.isdigit() or len(user_input) < 10:
             await update.message.reply_text(
@@ -268,10 +254,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return WAITING_AADHAR
     
-    # Show processing message
     msg = await update.message.reply_text("⏳ Searching... Please wait.")
     
-    # Perform search
     if search_type == "hitek":
         result = search_hitek(user_input)
     elif search_type == "num":
@@ -289,11 +273,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         result = "❌ Unknown search type"
     
-    # Delete processing message
     await msg.delete()
     
-    # Send result
-    formatted_result = format_result(result)
+    formatted_result = result[:4000]  # Telegram max length
     await update.message.reply_text(
         f"📊 **Search Results**\n\n{formatted_result}\n\n---\n⚡ Powered By @Introspection007",
         reply_markup=get_main_menu(),
@@ -302,38 +284,80 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ConversationHandler.END
 
-# ---- CANCEL ----
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Cancelled. Use /start to begin again.", reply_markup=get_main_menu())
     return ConversationHandler.END
 
 # ============================================================
-# MAIN
+# FLASK APP FOR WEBHOOK
 # ============================================================
-def main():
-    app = Application.builder().token(TOKEN).build()
-    
-    # Conversation handler
-    conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(button_handler)],
-        states={
-            WAITING_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
-            WAITING_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
-            WAITING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
-            WAITING_AADHAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)]
-    )
-    
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", start))
-    app.add_handler(conv_handler)
-    
-    print("🤖 MASTER API SEARCH BOT STARTED")
-    print("⚡ Powered By @Introspection007")
-    print("=" * 40)
-    
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+app = Flask(__name__)
+
+# Initialize Application and bot
+application = Application.builder().token(TOKEN).build()
+
+# Register handlers
+conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(button_handler)],
+    states={
+        WAITING_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
+        WAITING_ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
+        WAITING_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
+        WAITING_AADHAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
+    },
+    fallbacks=[CommandHandler("cancel", cancel)]
+)
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("help", start))
+application.add_handler(conv_handler)
+
+@app.route('/', methods=['GET'])
+def index():
+    return "🤖 API Search Bot is running! Powered By @Introspection007"
+
+@app.route('/webhook', methods=['POST'])
+async def webhook():
+    """Handle incoming Telegram updates"""
+    try:
+        # Get the update data
+        update_data = request.get_json()
+        if not update_data:
+            return jsonify({"status": "error", "message": "No data"}), 400
+
+        # Create Update object
+        update = Update.de_json(update_data, application.bot)
+
+        # Process the update
+        await application.process_update(update)
+
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        print(f"Error in webhook: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# ============================================================
+# SET WEBHOOK ON STARTUP
+# ============================================================
+def set_webhook():
+    """Set the webhook URL for Telegram"""
+    # Get the base URL from environment (Vercel provides this)
+    vercel_url = os.environ.get('VERCEL_URL')
+    if vercel_url:
+        webhook_url = f"https://{vercel_url}/webhook"
+        try:
+            response = requests.post(
+                f"https://api.telegram.org/bot{TOKEN}/setWebhook",
+                json={"url": webhook_url}
+            )
+            if response.ok:
+                print(f"✅ Webhook set to {webhook_url}")
+            else:
+                print(f"❌ Failed to set webhook: {response.text}")
+        except Exception as e:
+            print(f"❌ Error setting webhook: {e}")
+
+# Set webhook when app starts (Vercel serverless)
+set_webhook()
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=8080)
