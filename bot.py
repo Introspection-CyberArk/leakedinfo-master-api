@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MASTER API SEARCH BOT - Vercel Edition (Simplified)
+MASTER API SEARCH BOT - Vercel Edition
 Powered By @Introspection007
 """
 
@@ -35,7 +35,7 @@ def parse_json_safely(text):
     return None
 
 # ============================================================
-# API FUNCTIONS
+# API FUNCTIONS (SYNC)
 # ============================================================
 
 def search_num(number):
@@ -153,7 +153,7 @@ app = Flask(__name__)
 # Initialize Application and bot
 application = Application.builder().token(TOKEN).build()
 
-# ---- COMMAND HANDLERS ----
+# ---- COMMAND HANDLERS (SYNC) ----
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     welcome = f"""
@@ -291,7 +291,7 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_m
 application.add_handler(CommandHandler("cancel", cancel))
 
 # ============================================================
-# WEBHOOK ENDPOINT
+# WEBHOOK ENDPOINT - FIXED (SYNC)
 # ============================================================
 @app.route('/', methods=['GET'])
 def index():
@@ -299,13 +299,16 @@ def index():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    """Handle incoming Telegram updates"""
+    """Handle incoming Telegram updates - SYNC version"""
     try:
         update_data = request.get_json()
         if not update_data:
             return jsonify({"status": "error", "message": "No data"}), 400
         
+        # Create update object and process synchronously
         update = Update.de_json(update_data, application.bot)
+        
+        # Process the update - this is the fix!
         application.process_update(update)
         
         return jsonify({"status": "ok"}), 200
