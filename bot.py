@@ -36,7 +36,7 @@ def parse_json_safely(text):
     return None
 
 # ============================================================
-# API FUNCTIONS (SYNC)
+# API FUNCTIONS
 # ============================================================
 
 def search_num(number):
@@ -130,7 +130,7 @@ def search_all(query):
     return output
 
 # ============================================================
-# BOT HANDLERS (ASYNC)
+# BOT HANDLERS
 # ============================================================
 
 def get_main_menu():
@@ -244,7 +244,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
     
-    # Search
     msg = await update.message.reply_text("⏳ Searching... Please wait.")
     
     if search_type == "hitek":
@@ -291,7 +290,7 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_m
 application.add_handler(CommandHandler("cancel", cancel))
 
 # ============================================================
-# WEBHOOK ENDPOINT - FIXED WITH asyncio.run()
+# WEBHOOK ENDPOINT - FULLY FIXED
 # ============================================================
 @app.route('/', methods=['GET'])
 def index():
@@ -299,7 +298,7 @@ def index():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    """Handle incoming Telegram updates - using asyncio.run()"""
+    """Handle incoming Telegram updates"""
     try:
         update_data = request.get_json()
         if not update_data:
@@ -308,8 +307,17 @@ def webhook():
         # Create update object
         update = Update.de_json(update_data, application.bot)
         
-        # Process the update using asyncio.run() to await the coroutine
-        asyncio.run(application.process_update(update))
+        # Initialize and process the update
+        async def process():
+            # Initialize the application first
+            await application.initialize()
+            # Then process the update
+            await application.process_update(update)
+            # Shutdown gracefully
+            await application.shutdown()
+        
+        # Run the async function
+        asyncio.run(process())
         
         return jsonify({"status": "ok"}), 200
     except Exception as e:
@@ -317,11 +325,10 @@ def webhook():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # ============================================================
-# SET WEBHOOK - ALWAYS USE THE MAIN DOMAIN
+# SET WEBHOOK
 # ============================================================
 def set_webhook():
-    """Set the webhook URL for Telegram to the main domain"""
-    # Use the main domain, not the generated one
+    """Set the webhook URL for Telegram"""
     webhook_url = "https://leakedinfo-api.vercel.app/webhook"
     try:
         response = requests.post(
