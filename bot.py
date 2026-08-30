@@ -7,6 +7,7 @@ Powered By @Introspection007
 import os
 import json
 import re
+import asyncio
 import requests
 import urllib.parse
 from flask import Flask, request, jsonify
@@ -129,7 +130,7 @@ def search_all(query):
     return output
 
 # ============================================================
-# BOT HANDLERS (SYNC)
+# BOT HANDLERS (ASYNC)
 # ============================================================
 
 def get_main_menu():
@@ -145,15 +146,6 @@ def get_main_menu():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# ============================================================
-# FLASK APP
-# ============================================================
-app = Flask(__name__)
-
-# Initialize Application and bot
-application = Application.builder().token(TOKEN).build()
-
-# ---- COMMAND HANDLERS (SYNC) ----
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     welcome = f"""
@@ -283,6 +275,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Cancelled. Use /start to begin again.", reply_markup=get_main_menu())
 
+# ============================================================
+# FLASK APP
+# ============================================================
+app = Flask(__name__)
+
+# Initialize Application and bot
+application = Application.builder().token(TOKEN).build()
+
 # Register handlers
 application.add_handler(CommandHandler("start", start))
 application.add_handler(CommandHandler("help", start))
@@ -291,7 +291,7 @@ application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_m
 application.add_handler(CommandHandler("cancel", cancel))
 
 # ============================================================
-# WEBHOOK ENDPOINT - FIXED (SYNC)
+# WEBHOOK ENDPOINT - FIXED WITH asyncio.run()
 # ============================================================
 @app.route('/', methods=['GET'])
 def index():
@@ -299,17 +299,17 @@ def index():
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    """Handle incoming Telegram updates - SYNC version"""
+    """Handle incoming Telegram updates - using asyncio.run()"""
     try:
         update_data = request.get_json()
         if not update_data:
             return jsonify({"status": "error", "message": "No data"}), 400
         
-        # Create update object and process synchronously
+        # Create update object
         update = Update.de_json(update_data, application.bot)
         
-        # Process the update - this is the fix!
-        application.process_update(update)
+        # Process the update using asyncio.run() to await the coroutine
+        asyncio.run(application.process_update(update))
         
         return jsonify({"status": "ok"}), 200
     except Exception as e:
@@ -317,24 +317,23 @@ def webhook():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 # ============================================================
-# SET WEBHOOK ON STARTUP
+# SET WEBHOOK - ALWAYS USE THE MAIN DOMAIN
 # ============================================================
 def set_webhook():
-    """Set the webhook URL for Telegram"""
-    vercel_url = os.environ.get('VERCEL_URL')
-    if vercel_url:
-        webhook_url = f"https://{vercel_url}/webhook"
-        try:
-            response = requests.post(
-                f"https://api.telegram.org/bot{TOKEN}/setWebhook",
-                json={"url": webhook_url}
-            )
-            if response.ok:
-                print(f"✅ Webhook set to {webhook_url}")
-            else:
-                print(f"❌ Failed to set webhook: {response.text}")
-        except Exception as e:
-            print(f"❌ Error setting webhook: {e}")
+    """Set the webhook URL for Telegram to the main domain"""
+    # Use the main domain, not the generated one
+    webhook_url = "https://leakedinfo-api.vercel.app/webhook"
+    try:
+        response = requests.post(
+            f"https://api.telegram.org/bot{TOKEN}/setWebhook",
+            json={"url": webhook_url}
+        )
+        if response.ok:
+            print(f"✅ Webhook set to {webhook_url}")
+        else:
+            print(f"❌ Failed to set webhook: {response.text}")
+    except Exception as e:
+        print(f"❌ Error setting webhook: {e}")
 
 # Set webhook when app starts
 set_webhook()
